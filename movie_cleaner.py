@@ -113,6 +113,15 @@ def normalize_language(lang) -> str:
 
     return LANGUAGE_MAP.get(key, lang.capitalize())
 
+def detect_ffmpeg() -> bool:
+    """Check if ffmpeg is available."""
+    try:
+        subprocess.run(["ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        return False
+
+    return True
+
 # --- Argument parsing ---
 
 def parse_args() -> argparse.Namespace:
@@ -446,7 +455,12 @@ def main() -> int:
         sys.stdout.write(f"  {__file__} -r ru,de /folder/input.mkv\n")
 
         return 0
+    
+    if not detect_ffmpeg():
+        sys.stderr.write("Error: ffmpeg not found in PATH.\n")
 
+        return 1
+    
     args = process_args(args)
     media_files = get_media_files(args.paths)
     if not media_files:
