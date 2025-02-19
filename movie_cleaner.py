@@ -219,7 +219,7 @@ def get_media_files(paths) -> list[str]:
     Given a list of file or directory paths, return a list of absolute paths to media files.
     Media files are determined by their file extension.
     """
-    media_extensions = {'.mkv', '.mp4', '.avi', '.mov', '.flv', '.wmv', '.mpeg', '.mpg'}
+    media_extensions = {'.mkv', '.mp4', '.avi', '.mov', '.flv', '.wmv', '.mpeg', '.mpg', '.m4v', '.webm', '.ts', '.ogm', 'ogv'}
     files = []
     for path in paths:
         if os.path.isfile(path):
