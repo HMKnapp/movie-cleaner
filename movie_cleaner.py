@@ -406,6 +406,7 @@ def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> float:
     While running, every second the script checks the size of the output file to estimate progress.
     Returns the total elapsed time.
     """
+    expected_size_mib = expected_size / (1024 * 1024)
     start_time = time.time()
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     while process.poll() is None:
@@ -413,19 +414,23 @@ def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> float:
             current_size = os.path.getsize(output_file)
         else:
             current_size = 0
+        current_size_mib =  0 if current_size == 0 else current_size / (1024 * 1024)
         elapsed = time.time() - start_time
         if elapsed > 0 and current_size > 0:
             rate = current_size / elapsed  # bytes per second
             remaining = max(expected_size - current_size, 0)
             est_time = remaining / rate if rate > 0 else float('inf')
-            mb_rate = rate / (1024 * 1024)
-            sys.stderr.write(f"Progress: {current_size}/{expected_size} bytes, Estimated time: {int(est_time)}s, Speed: {mb_rate:.2f} MB/s\r")
+            mib_rate = rate / (1024 * 1024)
+            progress_percent = (current_size / expected_size) * 100
+            sys.stderr.write(f"Progress: {progress_percent:.0f}% ({current_size_mib:.0f}/{expected_size_mib:.0f} MiB), Estimated time: {int(est_time)}s, Speed: {mib_rate:.2f} MiB/s\033[K\r")
             sys.stderr.flush()
-        time.sleep(1)
+        time.sleep(.03)
     # Capture any remaining output.
     process.communicate()
     total_time = time.time() - start_time
+    sys.stderr.write(f"Progress: 100% ({current_size_mib:.0f} MiB), Speed: {mib_rate:.2f} MiB/s\r")
     sys.stderr.write("\n")
+
     return total_time
 
 # --- Main ---
@@ -435,7 +440,7 @@ def main() -> int:
     if (not args.paths) or ("-h" in sys.argv or "--help" in sys.argv):
         sys.stdout.write(f"Usage: {__file__} [options] file_or_directory ...\n")
         sys.stdout.write("Examples:\n")
-        sys.stdout.write(f"  {__file__} -ra ru -ks en /folder/input.mkv\n")
+        sys.stdout.write(f"  {__file__} -ra ru -ks en --dry-run /folder/input.mkv\n")
         sys.stdout.write(f"  {__file__} -ka en -rs ru,de /folder/input.mkv\n")
         sys.stdout.write(f"  {__file__} -k en /folder/input.mkv\n")
         sys.stdout.write(f"  {__file__} -r ru,de /folder/input.mkv\n")
@@ -452,7 +457,7 @@ def main() -> int:
     filters = get_filters(args)
 
     for file_path in media_files:
-        sys.stderr.write(f"\nProcessing file: {file_path}\n")
+        sys.stderr.write(f"Processing file: {file_path}\n")
         file_info = probe_file(file_path)
         if not file_info:
             continue
@@ -468,20 +473,23 @@ def main() -> int:
         # Run ffmpeg and monitor progress.
         total_time = run_ffmpeg_with_progress(ffmpeg_cmd, output_file, file_info["size"])
 
-        # When finished, print output file path to stdout.
-        sys.stdout.write(f"{output_file}\n")
         # Report remaining streams.
         remaining_audio = ", ".join([a["language"] for a in file_info.get("audio_kept", [])])
         remaining_subs = ", ".join([s["language"] for s in file_info.get("subtitle_kept", [])])
         sys.stderr.write("Remaining streams: ")
         if remaining_audio:
-            sys.stderr.write("audio: " + remaining_audio)
+            sys.stderr.write("Audio: " + remaining_audio)
         if remaining_audio and remaining_subs:
             sys.stderr.write("; ")
         if remaining_subs:
-            sys.stderr.write("subtitles: " + remaining_subs)
+            sys.stderr.write("Subtitles: " + remaining_subs)
         sys.stderr.write("\n")
         # Report processing stats.
+        mib_processed = file_info["size"] / (1024 * 1024)
+        speed = mib_processed / total_time if total_time > 0 else 0
+        sys.stderr.write("File written to: ")
+        sys.stderr.flush()
+        sys.stdout.write(f"{output_file}\n")
     
     return 0
 
