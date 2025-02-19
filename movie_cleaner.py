@@ -380,7 +380,7 @@ def build_ffmpeg_command(file_info) -> tuple[list[str], str]:
     dir_name, base_name = os.path.split(input_file)
     name, ext = os.path.splitext(base_name)
     output_file = os.path.join(dir_name, f"{name}.cleaned{ext}")
-    cmd = ["ffmpeg", "-i", input_file, "-c", "copy"]
+    cmd = ["ffmpeg", "-y", "-i", input_file, "-c", "copy"]
     # Always map all video streams.
     cmd.extend(["-map", "0:v"])
     for a in file_info.get("audio_kept", []):
