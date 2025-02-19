@@ -1,42 +1,4 @@
 #!/usr/bin/env python3
-f"""
-{__file__}
-
-This script accepts one or more files and/or directories as unnamed parameters.
-It recursively finds media files (based on extension), probes each file with ffprobe to 
-determine its streams (video, audio, subtitles) and associated metadata (including language and filesize),
-and then—based on command‐line filtering options—builds an ffmpeg command that “cleans” the file by mapping 
-only the streams that should be kept. The output file is written in the same directory with “.cleaned” added before 
-the file extension.
-
-Filtering options (each accepts a comma‐separated list of language codes or track numbers):
-  -k,  --keep             => “keep” (i.e. remove all streams that do not match) for both audio and subtitles.
-  -r,  --remove           => “remove” (i.e. drop streams that match) for both audio and subtitles.
-  -ka, --keep-audio       => like -k but for audio only.
-  -ra, --remove-audio     => like -r but for audio only.
-  -ks, --keep-subtitles   => like -k but for subtitles only.
-  -rs, --remove-subtitles => like -r but for subtitles only.
-  --dry-run               => print ffmpeg command without executing it.
-
-Notes:
- • You cannot combine -r with (-ra or -rs) nor -k with (-ka or -ks).
- • If an element appears in both the keep and remove lists for a given type, it is removed from the remove list and a warning is issued.
- • A generic -r is treated as both -ra and -rs; likewise -k is treated as both -ka and -ks.
- • For any list, items that are integers (e.g. “2”) refer to track numbers (1-based indexing).
- • For strings, a lookup table is used so that, for example, a user’s “en” will match “eng”, “English”, etc.
- • Before running ffmpeg the script prints to stderr which languages (tracks) will be removed.
- • While ffmpeg runs, the script polls the output file every second to estimate remaining time and current speed.
- • When ffmpeg finishes, the output file’s path is printed to stdout, and the remaining streams plus processing stats are printed to stderr.
-
-Usage Examples:
-  {__file__} -ra ru -ks en /folder/input.mkv
-  {__file__} -ka en -rs ru,de /folder/input.mkv
-  {__file__} -k en /folder/input.mkv
-  {__file__} -r ru,de /folder/input.mkv
-
-For help run:
-  {__file__} -h
-"""
 
 import argparse
 import os
@@ -374,9 +336,6 @@ def build_ffmpeg_command(file_info, output_dir) -> tuple[list[str], str]:
     Constructs an ffmpeg command that copies the file's video stream(s) plus
     only the desired audio and subtitle streams. The output filename is the same as the
     input, but with ".cleaned" inserted before the extension.
-
-    TODO: add argument to specify output directory
-    TODO: add argument to overwrite existing files
     """
     input_file = file_info["file_path"]
     dir_name, base_name = os.path.split(input_file)
@@ -456,16 +415,6 @@ def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> float:
 
 def main() -> int:
     args = parse_args()
-    if (not args.paths) or ("-h" in sys.argv or "--help" in sys.argv):
-        sys.stdout.write(f"Usage: {__file__} [options] file_or_directory ...\n")
-        sys.stdout.write("Examples:\n")
-        sys.stdout.write(f"  {__file__} -ra ru -ks en --dry-run /folder/input.mkv\n")
-        sys.stdout.write(f"  {__file__} -ka en -rs ru,de /folder/input.mkv\n")
-        sys.stdout.write(f"  {__file__} -k en /folder/input.mkv\n")
-        sys.stdout.write(f"  {__file__} -r ru,de /folder/input.mkv\n")
-
-        return 0
-    
     if not detect_ffmpeg():
         sys.stderr.write("Error: ffmpeg not found in PATH.\n")
 
