@@ -399,11 +399,12 @@ def report_removals(file_info) -> None:
     """
     a_removed = {track["language"] for track in file_info.get("audio_removed", [])}
     s_removed = {track["language"] for track in file_info.get("subtitle_removed", [])}
+    sys.stderr.write("Removing ")
     msgs = []
     if a_removed:
-        msgs.append("Removing audio: " + ", ".join(sorted(a_removed)))
+        msgs.append("audio: " + ", ".join(sorted(a_removed)))
     if s_removed:
-        msgs.append("Removing subtitles: " + ", ".join(sorted(s_removed)))
+        msgs.append("subtitles: " + ", ".join(sorted(s_removed)))
     if msgs:
         sys.stderr.write("; ".join(msgs) + "\n")
 
@@ -437,7 +438,7 @@ def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> float:
     # Capture any remaining output.
     process.communicate()
     total_time = time.time() - start_time
-    sys.stderr.write(f"Progress: 100% ({current_size_mib:.0f} MiB), Speed: {mib_rate:.2f} MiB/s\r")
+    sys.stderr.write(f"Progress: 100% ({current_size_mib:.0f} MiB), Speed: {mib_rate:.2f} MiB/s\033[K\r")
     sys.stderr.write("\n")
 
     return total_time
@@ -490,13 +491,13 @@ def main() -> int:
         # Report remaining streams.
         remaining_audio = ", ".join([a["language"] for a in file_info.get("audio_kept", [])])
         remaining_subs = ", ".join([s["language"] for s in file_info.get("subtitle_kept", [])])
-        sys.stderr.write("Remaining streams: ")
+        sys.stderr.write("Remaining ")
         if remaining_audio:
-            sys.stderr.write("Audio: " + remaining_audio)
+            sys.stderr.write("audio: " + remaining_audio)
         if remaining_audio and remaining_subs:
             sys.stderr.write("; ")
         if remaining_subs:
-            sys.stderr.write("Subtitles: " + remaining_subs)
+            sys.stderr.write("subtitles: " + remaining_subs)
         sys.stderr.write("\n")
         # Report processing stats.
         mib_processed = file_info["size"] / (1024 * 1024)
