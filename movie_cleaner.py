@@ -140,6 +140,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--keep-subtitle", dest="keep_subtitles_alias", help=argparse.SUPPRESS)
     parser.add_argument("--remove-subtitle", dest="remove_subtitles_alias", help=argparse.SUPPRESS)
     parser.add_argument("--dry-run", action="store_true", help="Print the ffmpeg command without executing it")
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite input files")
     args = parser.parse_args()
 
     return args
@@ -495,6 +496,11 @@ def main() -> int:
 
         # Run ffmpeg and monitor progress.
         total_time = run_ffmpeg_with_progress(ffmpeg_cmd, output_file, file_info["size"])
+
+        # Overwrite the input file if requested.
+        if args.overwrite:
+            os.replace(output_file, file_path)
+            output_file = file_path
 
         # Report remaining streams.
         remaining_audio = ", ".join([a["language"] for a in file_info.get("audio_kept", [])])
