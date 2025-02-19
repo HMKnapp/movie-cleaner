@@ -104,16 +104,18 @@ LANGUAGE_MAP = {
     "zh": "Chinese", "chi": "Chinese", "chinese": "Chinese"
 }
 
-def normalize_language(lang):
+def normalize_language(lang) -> str:
     """Return the long form for a language code if known; otherwise capitalize."""
     if not lang:
         return "Undetermined"
+    
     key = lang.strip().lower()
+
     return LANGUAGE_MAP.get(key, lang.capitalize())
 
 # --- Argument parsing ---
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Clean media files by removing unwanted audio/subtitle streams.",
         formatter_class=argparse.RawTextHelpFormatter
@@ -129,9 +131,10 @@ def parse_args():
     parser.add_argument("--remove-subtitle", dest="remove_subtitles_alias", help=argparse.SUPPRESS)
     parser.add_argument("--dry-run", action="store_true", help="Print the ffmpeg command without executing it")
     args = parser.parse_args()
+
     return args
 
-def process_args(args):
+def process_args(args) -> argparse.Namespace:
     # If alias options are provided, use them if the primary ones are not given.
     if args.keep_subtitles_alias and not args.keep_subtitles:
         args.keep_subtitles = args.keep_subtitles_alias
@@ -147,15 +150,17 @@ def process_args(args):
     if args.keep and (args.keep_audio or args.keep_subtitles):
         sys.stderr.write("Error: -k/--keep cannot be combined with -ka/--keep-audio or -ks/--keep-subtitles\n")
         sys.exit(1)
+
     return args
 
-def parse_list(arg_str):
+def parse_list(arg_str) -> tuple[list[int], list[str]]:
     """
     Parses a comma-separated list and returns a tuple: (list_of_ints, list_of_strings)
     Strings are sorted by descending length then alphabetically (case insensitive).
     """
     if not arg_str:
         return ([], [])
+    
     items = [item.strip() for item in arg_str.split(",") if item.strip()]
     int_items = []
     str_items = []
@@ -166,9 +171,10 @@ def parse_list(arg_str):
             str_items.append(item)
     str_items = sorted(str_items, key=lambda s: (-len(s), s.lower()))
     int_items = sorted(int_items)
+
     return (int_items, str_items)
 
-def get_filters(args):
+def get_filters(args) -> dict[str, dict[str, tuple[list, list]]]:
     """
     Build a filters dictionary for both audio and subtitles.
     Each filter is a dict with keys "keep" and "remove", each holding a tuple: (list_of_ints, list_of_strings).
@@ -203,11 +209,12 @@ def get_filters(args):
             else:
                 new_remove_str.append(item)
         filters[typ]["remove"] = (remove_int, new_remove_str)
+
     return filters
 
 # --- File discovery and probing ---
 
-def get_media_files(paths):
+def get_media_files(paths) -> list[str]:
     """
     Given a list of file or directory paths, return a list of absolute paths to media files.
     Media files are determined by their file extension.
@@ -225,9 +232,10 @@ def get_media_files(paths):
                     ext = os.path.splitext(fname)[1].lower()
                     if ext in media_extensions:
                         files.append(os.path.abspath(os.path.join(root, fname)))
+
     return files
 
-def probe_file(file_path):
+def probe_file(file_path) -> dict[str, str|int|list]:
     """
     Uses ffprobe to get stream and format info for a given file.
     Returns a dict with:
@@ -248,6 +256,7 @@ def probe_file(file_path):
         info = json.loads(result.stdout)
     except Exception as e:
         sys.stderr.write(f"Error probing file {file_path}: {e}\n")
+
         return None
 
     file_info = {"file_path": file_path}
@@ -270,7 +279,7 @@ def probe_file(file_path):
         if ctype == "audio":
             file_info["audio_tracks"].append({
                 "ffmpeg_index": audio_count,   # zero-based index within audio streams
-                "track_no": audio_count + 1,     # 1-based track number
+                "track_no": audio_count + 1,   # 1-based track number
                 "language": lang,
                 "raw_language": tags.get("language", "und")
             })
@@ -288,11 +297,12 @@ def probe_file(file_path):
                 "ffmpeg_index": video_count,
             })
             video_count += 1
+
     return file_info
 
 # --- Filtering streams ---
 
-def filter_tracks(tracks, keep_filter, remove_filter):
+def filter_tracks(tracks, keep_filter, remove_filter) -> tuple[list, list]:
     """
     Given a list of track dicts (each with 'track_no' and 'language'),
     and a keep filter (tuple of ints, strings) and remove filter,
@@ -328,6 +338,7 @@ def filter_tracks(tracks, keep_filter, remove_filter):
             kept.append(track)
         else:
             removed.append(track)
+
     return kept, removed
 
 def apply_filters(file_info, filters):
@@ -342,15 +353,19 @@ def apply_filters(file_info, filters):
     file_info["audio_removed"] = audio_removed
     file_info["subtitle_kept"] = sub_kept
     file_info["subtitle_removed"] = sub_removed
+
     return file_info
 
 # --- Building the ffmpeg command ---
 
-def build_ffmpeg_command(file_info):
+def build_ffmpeg_command(file_info) -> tuple[list[str], str]:
     """
     Constructs an ffmpeg command that copies the file's video stream(s) plus
     only the desired audio and subtitle streams. The output filename is the same as the
     input, but with ".cleaned" inserted before the extension.
+
+    TODO: add argument to specify output directory
+    TODO: add argument to overwrite existing files
     """
     input_file = file_info["file_path"]
     dir_name, base_name = os.path.split(input_file)
@@ -364,25 +379,28 @@ def build_ffmpeg_command(file_info):
     for s in file_info.get("subtitle_kept", []):
         cmd.extend(["-map", f"0:s:{s['ffmpeg_index']}"])
     cmd.append(output_file)
+
     return cmd, output_file
 
-def report_removals(file_info):
+# --- Informing user which streams will be removed ---
+
+def report_removals(file_info) -> None:
     """
-    Reports (to stderr) which audio/subtitle languages are being removed.
+    Reports which audio/subtitle languages are being removed.
     """
     a_removed = {track["language"] for track in file_info.get("audio_removed", [])}
     s_removed = {track["language"] for track in file_info.get("subtitle_removed", [])}
     msgs = []
     if a_removed:
-        msgs.append("removing audio: " + ", ".join(sorted(a_removed)))
+        msgs.append("Removing audio: " + ", ".join(sorted(a_removed)))
     if s_removed:
-        msgs.append("removing subtitles: " + ", ".join(sorted(s_removed)))
+        msgs.append("Removing subtitles: " + ", ".join(sorted(s_removed)))
     if msgs:
         sys.stderr.write("; ".join(msgs) + "\n")
 
 # --- Running ffmpeg with progress monitoring ---
 
-def run_ffmpeg_with_progress(cmd, output_file, expected_size):
+def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> float:
     """
     Runs the given ffmpeg command as a subprocess.
     While running, every second the script checks the size of the output file to estimate progress.
@@ -412,7 +430,7 @@ def run_ffmpeg_with_progress(cmd, output_file, expected_size):
 
 # --- Main ---
 
-def main():
+def main() -> int:
     args = parse_args()
     if (not args.paths) or ("-h" in sys.argv or "--help" in sys.argv):
         sys.stdout.write(f"Usage: {__file__} [options] file_or_directory ...\n")
@@ -421,13 +439,15 @@ def main():
         sys.stdout.write(f"  {__file__} -ka en -rs ru,de /folder/input.mkv\n")
         sys.stdout.write(f"  {__file__} -k en /folder/input.mkv\n")
         sys.stdout.write(f"  {__file__} -r ru,de /folder/input.mkv\n")
-        sys.exit(0)
+
+        return 0
 
     args = process_args(args)
     media_files = get_media_files(args.paths)
     if not media_files:
         sys.stderr.write("No media files found.\n")
-        sys.exit(1)
+
+        return 1
 
     filters = get_filters(args)
 
@@ -462,9 +482,8 @@ def main():
             sys.stderr.write("subtitles: " + remaining_subs)
         sys.stderr.write("\n")
         # Report processing stats.
-        mb_processed = file_info["size"] / (1024 * 1024)
-        speed = mb_processed / total_time if total_time > 0 else 0
-        sys.stderr.write(f"Processing time: {total_time:.2f}s, Average speed: {speed:.2f} MB/s\n")
+    
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
