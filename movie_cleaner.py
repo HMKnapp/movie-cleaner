@@ -136,6 +136,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-ra", "--remove-audio", help="Remove specified audio stream(s) (languages or track numbers, comma-separated)")
     parser.add_argument("-ks", "--keep-subtitles", help="Keep only specified subtitle stream(s) (languages or track numbers, comma-separated)")
     parser.add_argument("-rs", "--remove-subtitles", help="Remove specified subtitle stream(s) (languages or track numbers, comma-separated)")
+    parser.add_argument("-o", "--output-dir", nargs=1, help="Output directory for cleaned files")
     parser.add_argument("--keep-subtitle", dest="keep_subtitles_alias", help=argparse.SUPPRESS)
     parser.add_argument("--remove-subtitle", dest="remove_subtitles_alias", help=argparse.SUPPRESS)
     parser.add_argument("--dry-run", action="store_true", help="Print the ffmpeg command without executing it")
@@ -367,7 +368,7 @@ def apply_filters(file_info, filters):
 
 # --- Building the ffmpeg command ---
 
-def build_ffmpeg_command(file_info) -> tuple[list[str], str]:
+def build_ffmpeg_command(file_info, output_dir) -> tuple[list[str], str]:
     """
     Constructs an ffmpeg command that copies the file's video stream(s) plus
     only the desired audio and subtitle streams. The output filename is the same as the
@@ -379,6 +380,13 @@ def build_ffmpeg_command(file_info) -> tuple[list[str], str]:
     input_file = file_info["file_path"]
     dir_name, base_name = os.path.split(input_file)
     name, ext = os.path.splitext(base_name)
+    if output_dir and not os.path.exists(output_dir[0]):
+        try:
+            os.makedirs(output_dir[0])
+        except Exception as e:
+            sys.stderr.write(f"Error creating output directory: {e}\n")
+            return 2
+        dir_name = output_dir[0]
     output_file = os.path.join(dir_name, f"{name}.cleaned{ext}")
     cmd = ["ffmpeg", "-y", "-i", input_file, "-c", "copy"]
     # Always map all video streams.
@@ -477,7 +485,7 @@ def main() -> int:
         if not file_info:
             continue
         file_info = apply_filters(file_info, filters)
-        ffmpeg_cmd, output_file = build_ffmpeg_command(file_info)
+        ffmpeg_cmd, output_file = build_ffmpeg_command(file_info, args.output_dir)
         report_removals(file_info)
 
         # Print the command if in dry-run mode.
