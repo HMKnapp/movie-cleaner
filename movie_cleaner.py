@@ -314,7 +314,7 @@ def filter_tracks(tracks, keep_filter, remove_filter) -> tuple[list, list]:
 
     return kept, removed
 
-def apply_filters(file_info, filters):
+def apply_filters(file_info, filters) -> dict[str, str|int|list]:
     """Apply the audio and subtitle filters to a file's info."""
     audio_kept, audio_removed = filter_tracks(file_info["audio_tracks"],
                                                 filters["audio"]["keep"],
@@ -387,12 +387,13 @@ def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> float:
     expected_size_mib = expected_size / (1024 * 1024)
     start_time = time.time()
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    mib_rate = 0.0
     while process.poll() is None:
         if os.path.exists(output_file):
             current_size = os.path.getsize(output_file)
         else:
             current_size = 0
-        current_size_mib =  0 if current_size == 0 else current_size / (1024 * 1024)
+        current_size_mib = 0 if current_size == 0 else current_size / (1024 * 1024)
         elapsed = time.time() - start_time
         if elapsed > 0 and current_size > 0:
             rate = current_size / elapsed  # bytes per second
@@ -402,9 +403,8 @@ def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> float:
             progress_percent = (current_size / expected_size) * 100
             sys.stderr.write(f"Progress: {progress_percent:.0f}% ({current_size_mib:.0f}/{expected_size_mib:.0f} MiB), Estimated time: {int(est_time)}s, Speed: {mib_rate:.2f} MiB/s\033[K\r")
             sys.stderr.flush()
-        time.sleep(.03)
-    # Capture any remaining output.
-    process.communicate()
+        time.sleep(0.03)
+    stdout_data, stderr_data = process.communicate()
     total_time = time.time() - start_time
     sys.stderr.write(f"Progress: 100% ({current_size_mib:.0f} MiB), Speed: {mib_rate:.2f} MiB/s\033[K\r")
     sys.stderr.write("\n")
