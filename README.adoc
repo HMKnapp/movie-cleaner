@@ -40,9 +40,7 @@ Take this input file with Danish and Russian audio, and Danish, English, and Rus
 == Usage
 [source, sh]
 ----
-movie_cleaner.py [-h] [-k KEEP] [-r REMOVE] [-ka KEEP_AUDIO] [-ra REMOVE_AUDIO] [-ks KEEP_SUBTITLES] [-rs REMOVE_SUBTITLES] [-o OUTPUT_DIR]
-                        [--dry-run] [--overwrite]
-                        [paths ...]
+usage: movie_cleaner.py [-h] [-k KEEP] [-r REMOVE] [-ka KEEP_AUDIO] [-ra REMOVE_AUDIO] [-ks KEEP_SUBTITLES] [-rs REMOVE_SUBTITLES] [-o OUTPUT_DIR] [--dry-run] [--overwrite] [--no-clean-metadata] [paths ...]
 
 Clean media files by removing unwanted audio/subtitle streams.
 
@@ -65,4 +63,5 @@ options:
                         Output directory for cleaned files
   --dry-run             Print the ffmpeg command without executing it
   --overwrite           Overwrite input files
+  --no-clean-metadata   Do not remove 'title' and 'comment' metadata (default is to remove them)
 ----
