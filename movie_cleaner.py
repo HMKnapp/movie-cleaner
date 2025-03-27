@@ -103,6 +103,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--remove-subtitle", dest="remove_subtitles_alias", help=argparse.SUPPRESS)
     parser.add_argument("--dry-run", action="store_true", help="Print the ffmpeg command without executing it")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite input files")
+    parser.add_argument("--no-clean-metadata", action="store_true", 
+                        help="Do not remove 'title' and 'comment' metadata (default is to remove them)")
     args = parser.parse_args()
 
     return args
@@ -331,7 +333,7 @@ def apply_filters(file_info, filters) -> dict[str, str|int|list]:
 
 # --- Building the ffmpeg command ---
 
-def build_ffmpeg_command(file_info, output_dir) -> tuple[list[str], str]:
+def build_ffmpeg_command(file_info, output_dir, clean_metadata=True) -> tuple[list[str], str]:
     """
     Constructs an ffmpeg command that copies the file's video stream(s) plus
     only the desired audio and subtitle streams. The output filename is the same as the
@@ -349,6 +351,11 @@ def build_ffmpeg_command(file_info, output_dir) -> tuple[list[str], str]:
         dir_name = output_dir[0]
     output_file = os.path.join(dir_name, f"{name}.cleaned{ext}")
     cmd = ["ffmpeg", "-y", "-i", input_file, "-c", "copy"]
+
+    if clean_metadata:
+        cmd.extend(["-metadata", "title=", "-metadata", "comment="])
+        cmd.extend(["-metadata:s:v:0", "title=", "-metadata:s:v:0", "comment="])
+        
     # Always map all video streams.
     cmd.extend(["-map", "0:v"])
     for a in file_info.get("audio_kept", []):
@@ -378,10 +385,11 @@ def report_removals(file_info) -> None:
 
 # --- Running ffmpeg with progress monitoring ---
 
-def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> float:
+def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> tuple[float, bool]:
     """
     Runs the given ffmpeg command as a subprocess.
     While running, every second the script checks the size of the output file to estimate progress.
+    If ffmpeg fails, outputs the ffmpeg command and error output from ffmpeg, then removes the output file.
     Returns the total elapsed time.
     """
     expected_size_mib = expected_size / (1024 * 1024)
@@ -401,15 +409,22 @@ def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> float:
             est_time = remaining / rate if rate > 0 else float('inf')
             mib_rate = rate / (1024 * 1024)
             progress_percent = (current_size / expected_size) * 100
-            sys.stderr.write(f"Progress: {progress_percent:.0f}% ({current_size_mib:.0f}/{expected_size_mib:.0f} MiB), Estimated time: {int(est_time)}s, Speed: {mib_rate:.2f} MiB/s\033[K\r")
+            sys.stderr.write(f"Progress: {progress_percent:.0f}% ({current_size_mib:.0f}/{expected_size_mib:.0f} MiB), "
+                             f"Estimated time: {int(est_time)}s, Speed: {mib_rate:.2f} MiB/s\033[K\r")
             sys.stderr.flush()
         time.sleep(0.03)
     stdout_data, stderr_data = process.communicate()
     total_time = time.time() - start_time
-    sys.stderr.write(f"Progress: 100% ({current_size_mib:.0f} MiB), Speed: {mib_rate:.2f} MiB/s\033[K\r")
-    sys.stderr.write("\n")
-
-    return total_time
+    retcode = process.returncode
+    if retcode != 0:
+        sys.stderr.write(f"\nFFmpeg command failed (exit code {retcode}): {' '.join(cmd)}\n")
+        if stderr_data:
+            sys.stderr.write("FFmpeg error output:\n" + str(stderr_data) + "\n")
+        if os.path.exists(output_file):
+            os.remove(output_file)
+    else:
+        sys.stderr.write(f"Progress: 100% ({current_size_mib:.0f} MiB), Speed: {mib_rate:.2f} MiB/s\033[K\r\n")
+    return total_time, retcode==0
 
 # --- Main ---
 
@@ -435,7 +450,7 @@ def main() -> int:
         if not file_info:
             continue
         file_info = apply_filters(file_info, filters)
-        ffmpeg_cmd, output_file = build_ffmpeg_command(file_info, args.output_dir)
+        ffmpeg_cmd, output_file = build_ffmpeg_command(file_info, args.output_dir, clean_metadata=not args.no_clean_metadata)
         report_removals(file_info)
 
         # Print the command if in dry-run mode.
@@ -444,7 +459,7 @@ def main() -> int:
             continue
 
         # Run ffmpeg and monitor progress.
-        total_time = run_ffmpeg_with_progress(ffmpeg_cmd, output_file, file_info["size"])
+        total_time, success = run_ffmpeg_with_progress(ffmpeg_cmd, output_file, file_info["size"])
 
         # Overwrite the input file if requested.
         if args.overwrite:
