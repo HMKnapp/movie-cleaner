@@ -99,6 +99,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-ks", "--keep-subtitles", help="Keep only specified subtitle stream(s) (languages or track numbers, comma-separated)")
     parser.add_argument("-rs", "--remove-subtitles", help="Remove specified subtitle stream(s) (languages or track numbers, comma-separated)")
     parser.add_argument("-o", "--output-dir", nargs=1, help="Output directory for cleaned files")
+    parser.add_argument("-O", "--output-dir-alias", dest="output_dir_alias", nargs=1, help=argparse.SUPPRESS)
     parser.add_argument("--keep-subtitle", dest="keep_subtitles_alias", help=argparse.SUPPRESS)
     parser.add_argument("--remove-subtitle", dest="remove_subtitles_alias", help=argparse.SUPPRESS)
     parser.add_argument("--dry-run", action="store_true", help="Print the ffmpeg command without executing it")
