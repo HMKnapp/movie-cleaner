@@ -108,6 +108,9 @@ def parse_args() -> argparse.Namespace:
                         help="Do not remove 'title' and 'comment' metadata (default is to remove them)")
     args = parser.parse_args()
 
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
     return args
 
 def process_args(args) -> argparse.Namespace:
