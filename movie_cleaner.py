@@ -341,7 +341,7 @@ def apply_filters(file_info, filters) -> dict[str, str|int|list]:
 
 # --- Building the ffmpeg command ---
 
-def build_ffmpeg_command(file_info, output_dir, clean_metadata=True) -> tuple[list[str], str]:
+def build_ffmpeg_command(file_info, output_dir, dry_run=False, clean_metadata=True) -> tuple[list[str], str]:
     """
     Constructs an ffmpeg command that copies the file's video stream(s) plus
     only the desired audio and subtitle streams. The output filename is the same as the
@@ -350,12 +350,16 @@ def build_ffmpeg_command(file_info, output_dir, clean_metadata=True) -> tuple[li
     input_file = file_info["file_path"]
     dir_name, base_name = os.path.split(input_file)
     name, ext = os.path.splitext(base_name)
-    if output_dir and not os.path.exists(output_dir[0]):
-        try:
-            os.makedirs(output_dir[0])
-        except Exception as e:
-            sys.stderr.write(f"Error creating output directory: {e}\n")
-            return 2
+
+    if output_dir:
+        if not os.path.exists(output_dir[0]):
+            try:
+                os.makedirs(output_dir[0])
+            except Exception as e:
+                sys.stderr.write(f"Error creating output directory: {e}\n")
+                if not dry_run:
+                    return 2
+
         dir_name = output_dir[0]
     output_file = os.path.join(dir_name, f"{name}.cleaned{ext}")
     cmd = ["ffmpeg", "-y", "-i", input_file, "-c", "copy"]
@@ -458,13 +462,14 @@ def main() -> int:
         if not file_info:
             continue
         file_info = apply_filters(file_info, filters)
-        ffmpeg_cmd, output_file = build_ffmpeg_command(file_info, args.output_dir, clean_metadata=not args.no_clean_metadata)
-        report_removals(file_info)
+        ffmpeg_cmd, output_file = build_ffmpeg_command(file_info, args.output_dir, args.dry_run, clean_metadata=not args.no_clean_metadata)
 
         # Print the command if in dry-run mode.
         if args.dry_run:
-            sys.stdout.write("Dry-run: " + " ".join(ffmpeg_cmd) + "\n")
+            sys.stdout.write("FFMPEG command: " + " ".join(ffmpeg_cmd) + "\n")
             continue
+
+        report_removals(file_info)        
 
         # Run ffmpeg and monitor progress.
         total_time, success = run_ffmpeg_with_progress(ffmpeg_cmd, output_file, file_info["size"])
