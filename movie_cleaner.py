@@ -111,6 +111,10 @@ def parse_args() -> argparse.Namespace:
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
+  
+    if args.output_dir and args.output_dir[0] == '.':
+        args.output_dir[0] = os.getcwd()
+
     return args
 
 def process_args(args) -> argparse.Namespace:
