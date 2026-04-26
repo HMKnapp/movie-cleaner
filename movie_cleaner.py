@@ -6,6 +6,7 @@ import sys
 import subprocess
 import json
 import time
+import threading
 
 # --- Language lookup table and helper functions ---
 
@@ -406,7 +407,20 @@ def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> tuple[float, bo
     """
     expected_size_mib = expected_size / (1024 * 1024)
     start_time = time.time()
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stderr_chunks = []
+
+    process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+
+    def drain_stderr():
+        while True:
+            chunk = process.stderr.read(4096)
+            if not chunk:
+                break
+            stderr_chunks.append(chunk)
+
+    stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+    stderr_thread.start()
+
     mib_rate = 0.0
     while process.poll() is None:
         if os.path.exists(output_file):
@@ -425,13 +439,14 @@ def run_ffmpeg_with_progress(cmd, output_file, expected_size) -> tuple[float, bo
                              f"Estimated time: {int(est_time)}s, Speed: {mib_rate:.2f} MiB/s\033[K\r")
             sys.stderr.flush()
         time.sleep(0.03)
-    stdout_data, stderr_data = process.communicate()
+    stderr_thread.join()
     total_time = time.time() - start_time
     retcode = process.returncode
+    stderr_data = b''.join(stderr_chunks)
     if retcode != 0:
         sys.stderr.write(f"\nFFmpeg command failed (exit code {retcode}): {' '.join(cmd)}\n")
         if stderr_data:
-            sys.stderr.write("FFmpeg error output:\n" + str(stderr_data) + "\n")
+            sys.stderr.write("FFmpeg error output:\n" + stderr_data.decode("utf-8", errors="replace") + "\n")
         if os.path.exists(output_file):
             os.remove(output_file)
     else:
